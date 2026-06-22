@@ -309,6 +309,7 @@ st.markdown(
             font-weight: 900;
             letter-spacing: -0.04em;
             color: var(--green);
+            margin-top: 1rem;
         }}
 
         .brand-nav {{
