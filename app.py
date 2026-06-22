@@ -38,6 +38,13 @@ INFERENCE_LOCK = threading.Lock()
 # Pengguna umum tidak perlu mengaturnya dari antarmuka.
 FIXED_IOU_THRESHOLD = 0.50
 
+# Pilihan kamera untuk WebRTC pada perangkat mobile.
+# "environment" = kamera belakang, "user" = kamera depan.
+CAMERA_FACING_MODES = {
+    "Kamera Belakang": "environment",
+    "Kamera Depan": "user",
+}
+
 
 # =========================================================
 # 2. DAFTAR CLASS DAN KELOMPOK SAMPAH
@@ -302,6 +309,7 @@ st.markdown(
             font-weight: 900;
             letter-spacing: -0.04em;
             color: var(--green);
+            margin-top: 1rem;
         }}
 
         .brand-nav {{
@@ -925,6 +933,7 @@ def render_detection_results(
 # =========================================================
 DEFAULT_SESSION_VALUES = {
     "input_mode": "Impor Foto",
+    "camera_facing": "Kamera Belakang",
     "realtime_active": False,
     "annotated_image": None,
     "detections": None,
@@ -979,9 +988,6 @@ with st.sidebar:
     )
 
     st.divider()
-    st.caption(
-        "Mapping sifat, kategori penanganan, dan bahan dasar dapat diubah di app.py."
-    )
 
 model_path = Path(model_path_input).expanduser()
 
@@ -1112,6 +1118,11 @@ with left_column:
                 "Ambil gambar menggunakan kamera",
                 key="camera_input",
             )
+            st.caption(
+                "Mode Ambil Foto mengikuti antarmuka kamera bawaan browser. "
+                "Jika browser menampilkan ikon putar kamera, gunakan ikon tersebut "
+                "untuk berpindah antara kamera depan dan belakang."
+            )
         else:
             selected_file = st.file_uploader(
                 "Pilih foto sampah",
@@ -1150,6 +1161,20 @@ with left_column:
             type="primary",
             disabled=(model is None or selected_image is None),
         )
+
+        st.markdown("##### Kamera Realtime")
+        camera_facing = st.radio(
+            "Pilih kamera realtime",
+            options=list(CAMERA_FACING_MODES),
+            key="camera_facing",
+            horizontal=True,
+            label_visibility="collapsed",
+            help=(
+                "Kamera Belakang digunakan untuk mendeteksi sampah di depan perangkat. "
+                "Kamera Depan digunakan untuk arah pengguna."
+            ),
+        )
+        camera_facing_mode = CAMERA_FACING_MODES[camera_facing]
 
         realtime_button_label = (
             "⏹️ Matikan Kamera Realtime"
@@ -1236,6 +1261,7 @@ if st.session_state.realtime_active and model is not None:
         confidence_threshold,
         image_size,
         frame_interval,
+        camera_facing_mode,
     )
 
     if st.session_state.realtime_processor_key != processor_key:
@@ -1252,12 +1278,13 @@ if st.session_state.realtime_active and model is not None:
     with realtime_left:
         with st.container(border=True):
             webrtc_streamer(
-                key="trash-realtime-camera",
+                key=f"trash-realtime-camera-{camera_facing_mode}",
                 video_frame_callback=st.session_state.realtime_processor,
                 media_stream_constraints={
                     "video": {
                         "width": {"ideal": 960},
                         "height": {"ideal": 540},
+                        "facingMode": {"ideal": camera_facing_mode},
                     },
                     "audio": False,
                 },
@@ -1275,10 +1302,11 @@ if st.session_state.realtime_active and model is not None:
             st.subheader("Petunjuk Realtime")
             st.markdown(
                 """
-                1. Izinkan browser mengakses kamera.
-                2. Arahkan kamera ke sampah.
-                3. Bounding box dan statistik akan ditampilkan di video.
-                4. Naikkan interval frame apabila deteksi terasa berat.
+                1. Pilih Kamera Belakang atau Kamera Depan pada bagian Sumber Gambar.
+                2. Izinkan browser mengakses kamera.
+                3. Arahkan kamera ke sampah.
+                4. Bounding box dan statistik akan ditampilkan di video.
+                5. Naikkan interval frame apabila deteksi terasa berat.
                 """
             )
             st.info(
