@@ -309,7 +309,6 @@ st.markdown(
             font-weight: 900;
             letter-spacing: -0.04em;
             color: var(--green);
-            margin-top: 1rem;
         }}
 
         .brand-nav {{
@@ -934,6 +933,7 @@ def render_detection_results(
 DEFAULT_SESSION_VALUES = {
     "input_mode": "Impor Foto",
     "camera_facing": "Kamera Belakang",
+    "camera_generation": 0,
     "realtime_active": False,
     "annotated_image": None,
     "detections": None,
@@ -949,6 +949,14 @@ for key, value in DEFAULT_SESSION_VALUES.items():
 def clear_static_result() -> None:
     st.session_state.annotated_image = None
     st.session_state.detections = None
+
+
+def reset_realtime_camera() -> None:
+    """Hentikan stream lama agar kamera baru dapat dipilih browser."""
+    st.session_state.realtime_active = False
+    st.session_state.realtime_processor = None
+    st.session_state.realtime_processor_key = None
+    st.session_state.camera_generation += 1
 
 
 # =========================================================
@@ -988,6 +996,9 @@ with st.sidebar:
     )
 
     st.divider()
+    st.caption(
+        "Mapping sifat, kategori penanganan, dan bahan dasar dapat diubah di app.py."
+    )
 
 model_path = Path(model_path_input).expanduser()
 
@@ -1169,12 +1180,18 @@ with left_column:
             key="camera_facing",
             horizontal=True,
             label_visibility="collapsed",
+            on_change=reset_realtime_camera,
             help=(
                 "Kamera Belakang digunakan untuk mendeteksi sampah di depan perangkat. "
-                "Kamera Depan digunakan untuk arah pengguna."
+                "Kamera Depan digunakan untuk arah pengguna. "
+                "Setelah pilihan diganti, aktifkan kembali kamera realtime."
             ),
         )
         camera_facing_mode = CAMERA_FACING_MODES[camera_facing]
+        st.caption(
+            "Jika pilihan kamera diubah, stream lama akan dihentikan. "
+            "Tekan Aktifkan Kamera Realtime untuk membuka kamera yang baru."
+        )
 
         realtime_button_label = (
             "⏹️ Matikan Kamera Realtime"
@@ -1262,6 +1279,7 @@ if st.session_state.realtime_active and model is not None:
         image_size,
         frame_interval,
         camera_facing_mode,
+        st.session_state.camera_generation,
     )
 
     if st.session_state.realtime_processor_key != processor_key:
@@ -1278,13 +1296,16 @@ if st.session_state.realtime_active and model is not None:
     with realtime_left:
         with st.container(border=True):
             webrtc_streamer(
-                key=f"trash-realtime-camera-{camera_facing_mode}",
+                key=(
+                    f"trash-realtime-camera-{camera_facing_mode}-"
+                    f"{st.session_state.camera_generation}"
+                ),
                 video_frame_callback=st.session_state.realtime_processor,
                 media_stream_constraints={
                     "video": {
                         "width": {"ideal": 960},
                         "height": {"ideal": 540},
-                        "facingMode": {"ideal": camera_facing_mode},
+                        "facingMode": {"exact": camera_facing_mode},
                     },
                     "audio": False,
                 },
@@ -1303,10 +1324,11 @@ if st.session_state.realtime_active and model is not None:
             st.markdown(
                 """
                 1. Pilih Kamera Belakang atau Kamera Depan pada bagian Sumber Gambar.
-                2. Izinkan browser mengakses kamera.
-                3. Arahkan kamera ke sampah.
-                4. Bounding box dan statistik akan ditampilkan di video.
-                5. Naikkan interval frame apabila deteksi terasa berat.
+                2. Setelah mengganti pilihan, tekan Aktifkan Kamera Realtime.
+                3. Izinkan browser mengakses kamera yang dipilih.
+                4. Arahkan kamera ke sampah.
+                5. Bounding box dan statistik akan ditampilkan di video.
+                6. Naikkan interval frame apabila deteksi terasa berat.
                 """
             )
             st.info(
